@@ -1,79 +1,25 @@
-from multiprocessing import Process, Pipe
-from os import getpid
-from datetime import datetime
+import threading
+from time import sleep
+import random
+forks = 5
+philosophers = 5
+
+forks_lock = [threading.Lock() for n in range(forks)]
 
 
-def local_time(counter):
-    return ' (LAMPORT_TIME={}, LOCAL_TIME={})'.format(counter,
-                                                      datetime.now())
+def philosophers_dinner(right_fork, left_fork, philosopher):
+    while True:
+        first_fork = min(right_fork, left_fork)
+        second_fork = max(right_fork, left_fork)
+        forks_lock[first_fork].acquire()
+        forks_lock[second_fork].acquire()
+        print(f'Философ {philosopher} ест')
+        sleep(random.randint(1, 5))
+        forks_lock[second_fork].release()
+        forks_lock[first_fork].release()
 
 
-def calc_recv_timestamp(recv_time_stamp, counter):
-    return max(recv_time_stamp, counter) + 1
-
-
-def event(pid, counter):
-    counter += 1
-    print('Something happened in {} !'. \
-          format(pid) + local_time(counter))
-    return counter
-
-
-def send_message(pipe, pid, counter):
-    counter += 1
-    pipe.send(('Empty shell', counter))
-    print('Message sent from ' + str(pid) + local_time(counter))
-    return counter
-
-
-def recv_message(pipe, pid, counter):
-    message, timestamp = pipe.recv()
-    counter = calc_recv_timestamp(timestamp, counter)
-    print('Message received at ' + str(pid) + local_time(counter))
-    return counter
-
-
-def process_one(pipe12):
-    pid = getpid()
-    counter = 0
-    counter = event(pid, counter)
-    counter = send_message(pipe12, pid, counter)
-    counter = event(pid, counter)
-    counter = recv_message(pipe12, pid, counter)
-    counter = event(pid, counter)
-
-
-def process_two(pipe21, pipe23):
-    pid = getpid()
-    counter = 0
-    counter = recv_message(pipe21, pid, counter)
-    counter = send_message(pipe21, pid, counter)
-    counter = send_message(pipe23, pid, counter)
-    counter = recv_message(pipe23, pid, counter)
-
-
-def process_three(pipe32):
-    pid = getpid()
-    counter = 0
-    counter = recv_message(pipe32, pid, counter)
-    counter = send_message(pipe32, pid, counter)
-
-
-if __name__ == '__main__':
-    oneandtwo, twoandone = Pipe()
-    twoandthree, threeandtwo = Pipe()
-
-    process1 = Process(target=process_one,
-                       args=(oneandtwo,))
-    process2 = Process(target=process_two,
-                       args=(twoandone, twoandthree))
-    process3 = Process(target=process_three,
-                       args=(threeandtwo,))
-
-    process1.start()
-    process2.start()
-    process3.start()
-
-    process1.join()
-    process2.join()
-    process3.join()
+for philosopher in range(philosophers):
+    right_fork = philosopher
+    left_fork = (philosopher+1) % philosophers
+    threading.Thread(target=philosophers_dinner, args=(right_fork, left_fork, philosopher)).start()
